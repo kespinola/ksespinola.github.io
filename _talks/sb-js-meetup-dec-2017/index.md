@@ -1,12 +1,12 @@
 ---
 layout: post
-title: SB JS Meetup
+title: SB JS Meetup | December 2017
 date: 12-12-07
 ---
 
 Setting up continuous deployment of a react relay application to amazon using circleci.
 
-[Follow along repo](https://github.com/ksespinola/relay-aws-starter)
+[relay-aws-starter](https://github.com/ksespinola/relay-aws-starter)
 
 ## 1. Install packages and listing scripts
 
@@ -218,25 +218,69 @@ $ npm run schema
 
 ## 3. Project structure
 
+#### Source code transpiling and development server configuration
+
+```javascript
+0 const FlowWebpackPlugin = require("flow-webpack-plugin");
+1
+2 const PUBLIC_PATH = process.env.PUBLIC_PATH || "http://localhost:5000/";
+3
+4 module.exports = {
+5   use: [
+6     [
+7       "neutrino-preset-react",
+8       {
+9         babel: {
+10           plugins: [
+11             "transform-flow-strip-types",
+12             ["relay", { schema: "./schema.graphql" }]
+13           ]
+14         },
+15         html: {
+16           title: "Relay AWS Starter"
+17         },
+18         devServer: {
+19           publicPath: PUBLIC_PATH,
+20           historyApiFallback: {
+21             rewrites: [{ from: /^\/$/, to: "/index.html" }]
+22           }
+23         }
+24       }
+25     ],
+26     ["neutrino-middleware-env", ["GRAPHQL_URL"]],
+27     ({ config, options }) => {
+28       config.output.publicPath(PUBLIC_PATH);
+29
+30       config.when(options.command === "start", config => {
+31         config.devServer.headers({ "Access-Control-Allow-Origin": "*" });
+32       });
+33
+34       config.plugin("flow").use(FlowWebpackPlugin, []);
+35     }
+36   ]
+37 };
+```
+[Neutrino Docs](https://neutrino.js.org/presets/neutrino-preset-jest/)
+
 ```bash
 .
 ├── .circleci
-│   └── config.yml
+│   └── config.yml # continuous deployment configurations
 ├── .env
 ├── .env.sample
 ├── .eslintrc.json
-├── .flowconfig
+├── .flowconfig # type checker config
 ├── .gitignore
-├── .neutrinorc.js
+├── .neutrinorc.js # appliction build manager config
 ├── README.md
-├── package-lock.json
+├── package-lock.json # dependency lock file
 ├── package.json
 ├── public
 │   ├── favicon.ico
 │   ├── index.html
 │   └── manifest.json
-├── schema.graphql
-├── schema.js
+├── schema.graphql # type definition used by relay to validate queries
+├── schema.js # node script for convertion schema.{json -> graphql}
 ├── schema.json
 └── src
     ├── __generated__
@@ -245,24 +289,21 @@ $ npm run schema
     │   ├── routes_Home_Query.graphql.js
     │   └── routes_ProductShow_Query.graphql.js
     ├── __tests__
-    ├── components
+    ├── components # shareable resources between screens
     │   └── Product
     │       ├── Product.js
-    │       ├── __generated__
-    │       │   ├── ProductMutation.graphql.js
-    │       │   └── Product_product.graphql.js
     │       ├── index.js
     │       └── product.css
-    ├── index.js
-    ├── main.js
-    ├── routes.js
-    ├── screens
+    ├── index.js # entry point
+    ├── main.js # mount app to page
+    ├── routes.js # router entry point
+    ├── screens # viewable sections as seen from the user
     │   ├── App
-    │   │   ├── App.js
+    │   │   ├── App.js # main react component
     │   │   ├── __generated__
     │   │   │   └── App_shop.graphql.js
-    │   │   ├── app.css
-    │   │   └── index.js
+    │   │   ├── app.css # module styles
+    │   │   └── index.js # component entry
     │   ├── Catalog
     │   │   ├── Catalog.js
     │   │   ├── __generated__
@@ -283,8 +324,7 @@ $ npm run schema
     │       ├── __generated__
     │       │   └── ProductShow_node.graphql.js
     │       └── index.js
-    └── styles
-        ├── app.css
+    └── styles # vendor styles
         ├── font-awesome.min.css
         └── fonts
             ├── FontAwesome.otf
@@ -297,7 +337,50 @@ $ npm run schema
 
 ## 4. Configure continuous deployment tooling
 
+### AWS
+
+Provides hosting via S3 public bucket and distribution with Cloudfrount.
+
+#### a. IAM user
+
+#### User
+
+Specify `Programatic Access` only.
+
+![]({{ "/assets/images/iam-setup-1.png" | absolute_url }})
+
+#### Access
+
+After creating restrict user to just the buckets and distribution used for the project.
+
+![]({{ "/assets/images/iam-setup-2.png" | absolute_url }})
+
+#### Token
+
+Used by circleci to access aws using [awscli](https://aws.amazon.com/cli/).
+
+![]({{ "/assets/images/iam-setup-3.png" | absolute_url }})
+
+#### b. S3 bucket
+
+![]({{ "/assets/images/aws-s3-bucket-setup.png" | absolute_url }})
+
+![]({{ "/assets/images/aws-s3-bucket-static-hosting.png" | absolute_url }})
+
+#### b. Cloudfront distribution
+
+![]({{ "/assets/images/aws-cloudfront-info.png" | absolute_url }})
+
+#### Redirect
+
+Create a custom error rule that renders index.html for all 404s keeping the status code as 200.
+
+![]({{ "/assets/images/cloudfront-redirects.png" | absolute_url }})
+
+
 ### CircleCI
+
+![]({{ "/assets/images/circleci-workflow-graph.png" | absolute_url }})
 
 #### a. configuration file
 
@@ -360,24 +443,8 @@ workflows:
 
 ![Circle env]({{ "/assets/images/circleci-env-screenshot.png" | absolute_url }})
 
-[Circleci](https://circleci.com/docs/2.0/env-vars/)
+#### Documentation
 
-[Travis](https://docs.travis-ci.com/user/environment-variables/)
+[Circleci](https://circleci.com/docs/2.0)
 
-### AWS
-
-#### a.IAM user
-
-![]({{ "/assets/images/iam-setup-1.png" | absolute_url }})
-
-![]({{ "/assets/images/iam-setup-2.png" | absolute_url }})
-
-![]({{ "/assets/images/iam-setup-3.png" | absolute_url }})
-
-#### b. S3 bucket
-
-![]({{ "/assets/images/aws-s3-bucket-setup.png" | absolute_url }})
-
-#### b. Cloudfront distribution
-
-![]({{ "/assets/images/aws-cloudfront-info.png" | absolute_url }})
+[Travis](https://docs.travis-ci.com/)
